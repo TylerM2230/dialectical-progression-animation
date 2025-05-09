@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dialectic Spiral - Vibrant Gold, Intense Fire - Three.js</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; background-color: #111111; /* Dark background */ color: #eee; }
+        canvas { display: block; width: 100%; height: 100%; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            display:block;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+        }
+        #controls-info {
+             position: absolute;
+             bottom: 10px;
+             left: 10px;
+             color: #aaa;
+             font-size: 0.8rem;
+        }
+        /* Style for the reset button */
+        /* --- CSS Selector Corrected --- */
+        #restart-button { /* Corrected selector to match button ID */
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            padding: 8px 15px;
+            background-color: #4a5568; /* Tailwind gray-700 */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            z-index: 100;
+            transition: background-color 0.3s ease;
+        }
+        /* --- CSS Selector Corrected --- */
+        #restart-button:hover { /* Corrected selector to match button ID */
+            background-color: #2d3748; /* Tailwind gray-800 */
+        }
+
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+    <div id="info">Dialectical Spiral Progression</div>
+    <div id="controls-info">Click & drag to rotate. Scroll to zoom.</div>
+    <button id="restart-button">Reset</button>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        // Import necessary Three.js modules
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // === Basic Setup ===
+        let scene, camera, renderer, controls;
+        let clock = new THREE.Clock();
+        let spiralPoints = []; // Array to store points along the spiral
+        let spiralTube; // The visible tube
+        let movingObject; // The object tracing the path (sun/fire sphere)
+        let animationTime = 0; // Tracks progress along the spiral
+        const animationDuration = 20; // Total seconds for the full spiral animation
+        const pointsPerSecond = 25; // Increased for smoother fast path
+        const totalPoints = animationDuration * pointsPerSecond;
+        let currentPointIndex = 0; // Tracks how much of the spiral is drawn
+
+        // Spiral parameters (Taller)
+        const startRadius = 0.5;
+        const radiusIncreasePerTurn = 0.5;
+        const turns = 6;
+        const heightPerTurn = 2.5;
+        const totalHeight = turns * heightPerTurn;
+        const totalAngle = turns * Math.PI * 2;
+
+        // Particle System Variables
+        let particleSystem, particleGeometry, particleMaterial;
+        const maxParticles = 600; // Slightly more particles
+        let particleCount = 0;
+        let particlePositions, particleLifetimes, particleVelocities, particleColors;
+
+
+        // === Initialization ===
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111111);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, totalHeight / 1.8, totalHeight * 1.5);
+
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            // renderer.physicallyCorrectLights = true; // Not strictly needed for non-transmissive materials
+            document.body.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); // Adjust ambient for gold
+            scene.add(ambientLight);
+            const pointLight = new THREE.PointLight(0xfff5e8, 1.8, 150); // Main warm light
+            pointLight.position.set(turns * radiusIncreasePerTurn, totalHeight * 1.2, 15);
+            scene.add(pointLight);
+            const pointLight2 = new THREE.PointLight(0xe8f5ff, 0.8, 150); // Cooler fill light
+            pointLight2.position.set(-turns * radiusIncreasePerTurn, totalHeight * 0.5, -10);
+            scene.add(pointLight2);
+
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.target.set(0, totalHeight / 2, 0);
+            controls.minDistance = 2;
+            controls.maxDistance = 40;
+            controls.update();
+
+            // Create the moving object (Sun/Fire Sphere) - unchanged
+            const movingObjectGeometry = new THREE.SphereGeometry(0.2, 24, 24);
+            const movingObjectMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffdd33,
+                emissive: 0xff6600,
+                emissiveIntensity: 2.5,
+                metalness: 0.2,
+                roughness: 0.5,
+             });
+            movingObject = new THREE.Mesh(movingObjectGeometry, movingObjectMaterial);
+            scene.add(movingObject);
+
+            // Add Grid Helper
+            const gridSize = Math.max(15, turns * radiusIncreasePerTurn * 2.5);
+            const gridDivisions = 15;
+            const gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x333333, 0x666666);
+            gridHelper.position.y = -0.01;
+            scene.add(gridHelper);
+
+            // Initialize Particle System
+            initParticleSystem();
+
+            // Pre-calculate all points for the spiral path
+            calculateSpiralPoints();
+
+            // Create the initial (empty) tube geometry
+            createOrUpdateSpiralTube();
+
+            // Set initial position for the moving object
+            if (spiralPoints.length > 0) {
+                movingObject.position.copy(spiralPoints[0]);
+            }
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize, false);
+
+             // Reset button listener (JS uses 'restart-button' ID)
+            document.getElementById('restart-button').addEventListener('click', resetAnimation); // Function name matches definition
+
+
+            // Start the animation loop
+            animate();
+        }
+
+        // === Particle System Initialization (Increased size) ===
+        function initParticleSystem() {
+            particleGeometry = new THREE.BufferGeometry();
+            particlePositions = new Float32Array(maxParticles * 3);
+            particleLifetimes = new Float32Array(maxParticles);
+            particleVelocities = new Float32Array(maxParticles * 3);
+            particleColors = new Float32Array(maxParticles * 3);
+
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+            particleGeometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+
+            particleMaterial = new THREE.PointsMaterial({
+                size: 0.1, // INCREASED PARTICLE SIZE
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.9, // Slightly more opaque
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                sizeAttenuation: true,
+            });
+
+            particleSystem = new THREE.Points(particleGeometry, particleMaterial);
+            scene.add(particleSystem);
+        }
+
+        // === Emit a Particle (Brighter, More Intense Fire Colors) ===
+        function emitParticle() {
+            if (particleCount >= maxParticles) {
+                particleCount = 0; // Simple recycling
+            }
+            const pIndex = particleCount;
+
+            // Position at movingObject
+            particlePositions[pIndex * 3 + 0] = movingObject.position.x;
+            particlePositions[pIndex * 3 + 1] = movingObject.position.y;
+            particlePositions[pIndex * 3 + 2] = movingObject.position.z;
+
+            // Random velocity
+            particleVelocities[pIndex * 3 + 0] = (Math.random() - 0.5) * 0.6; // Slightly faster spread
+            particleVelocities[pIndex * 3 + 1] = (Math.random() - 0.5) * 0.6;
+            particleVelocities[pIndex * 3 + 2] = (Math.random() - 0.5) * 0.6;
+
+            // Lifetime (seconds)
+            particleLifetimes[pIndex] = Math.random() * 0.8 + 0.4; // Slightly shorter lifetime: 0.4 to 1.2 seconds
+
+            // Color (Brighter/Intense fiery red/orange/yellow) - UPDATED HSL
+            const fieryColor = new THREE.Color().setHSL(Math.random() * 0.12, 1.0, 0.6 + Math.random() * 0.3);
+            particleColors[pIndex * 3 + 0] = fieryColor.r;
+            particleColors[pIndex * 3 + 1] = fieryColor.g;
+            particleColors[pIndex * 3 + 2] = fieryColor.b;
+
+            particleCount++;
+            if (particleCount >= maxParticles) particleCount = 0; // Loop back for recycling
+
+            // Flag attributes for update
+            particleGeometry.attributes.position.needsUpdate = true;
+            particleGeometry.attributes.color.needsUpdate = true;
+        }
+
+        // === Update Particles (Unchanged logic, uses new lifetimes/colors) ===
+        function updateParticles(delta) {
+            if (!particleGeometry || !particleGeometry.attributes.position) return;
+            const positions = particleGeometry.attributes.position.array;
+            const colors = particleGeometry.attributes.color.array;
+            for (let i = 0; i < particleCount; i++) {
+                particleLifetimes[i] -= delta;
+                if (particleLifetimes[i] > 0) {
+                    positions[i * 3 + 0] += particleVelocities[i * 3 + 0] * delta;
+                    positions[i * 3 + 1] += particleVelocities[i * 3 + 1] * delta;
+                    positions[i * 3 + 2] += particleVelocities[i * 3 + 2] * delta;
+                    // Fade color towards black based on remaining lifetime
+                    const lifeRatio = particleLifetimes[i] / (0.4 + Math.random() * 0.8); // Approx original lifetime range
+                    colors[i * 3 + 0] *= lifeRatio;
+                    colors[i * 3 + 1] *= lifeRatio;
+                    colors[i * 3 + 2] *= lifeRatio;
+
+                } else {
+                    // Particle is dead, make it black / invisible
+                    colors[i * 3 + 0] = 0; colors[i * 3 + 1] = 0; colors[i * 3 + 2] = 0;
+                }
+            }
+            particleGeometry.attributes.position.needsUpdate = true;
+            particleGeometry.attributes.color.needsUpdate = true;
+        }
+
+
+        // === Spiral Path Calculation (Unchanged) ===
+        function calculateSpiralPoints() {
+            spiralPoints = [];
+            for (let i = 0; i <= totalPoints; i++) {
+                const fraction = i / totalPoints;
+                const angle = fraction * totalAngle;
+                const radius = startRadius + fraction * (turns * radiusIncreasePerTurn);
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius;
+                const y = fraction * totalHeight;
+                spiralPoints.push(new THREE.Vector3(x, y, z));
+            }
+        }
+
+        // === Create or Update Spiral Tube (Golden Yellow Material) ===
+        function createOrUpdateSpiralTube() {
+            if (spiralTube) {
+                scene.remove(spiralTube);
+                spiralTube.geometry.dispose();
+                spiralTube.material.dispose();
+            }
+
+            const pointsToShow = spiralPoints.slice(0, currentPointIndex + 1);
+            if (pointsToShow.length < 2) return;
+
+            const curve = new THREE.CatmullRomCurve3(pointsToShow);
+            const tubeRadius = 0.07; // Keep thickness from previous gold version
+            const tubeSegments = Math.max(10, pointsToShow.length * 2);
+            const radiusSegments = 6; // Keep smoothness from previous gold version
+            const tubeGeometry = new THREE.TubeGeometry(curve, tubeSegments, tubeRadius, radiusSegments, false);
+
+            const colors = [];
+            // Vibrant golden yellow gradient - UPDATED COLORS
+            const colorStart = new THREE.Color(0xFFFEC8); // Very light, almost white gold start
+            const colorEnd = new THREE.Color(0xFFC300);   // Rich, vibrant, almost orange gold end
+            const colorIntermediate = new THREE.Color();
+
+            for (let i = 0; i < tubeGeometry.attributes.position.count; i++) {
+                 const pointIndex = Math.floor((i / tubeGeometry.attributes.position.count) * pointsToShow.length);
+                 const fraction = Math.min(1, pointIndex / totalPoints);
+                 colorIntermediate.lerpColors(colorStart, colorEnd, fraction);
+                 colors.push(colorIntermediate.r, colorIntermediate.g, colorIntermediate.b);
+            }
+            tubeGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+            // Shiny Golden Yellow material - UPDATED MATERIAL
+            const tubeMaterial = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                metalness: 0.85, // High metalness for gold
+                roughness: 0.2,  // Low roughness for shininess
+             });
+
+            spiralTube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+            scene.add(spiralTube);
+        }
+
+
+        // === Animation Loop (Increased particle emission) ===
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            animationTime += delta;
+            let progress = Math.min(1, animationTime / animationDuration);
+            currentPointIndex = Math.floor(progress * totalPoints);
+            currentPointIndex = Math.min(currentPointIndex, spiralPoints.length - 1);
+
+            // Update moving object position
+            if (currentPointIndex >= 0 && currentPointIndex < spiralPoints.length) {
+                const point1 = spiralPoints[currentPointIndex];
+                const point2 = spiralPoints[Math.min(currentPointIndex + 1, spiralPoints.length - 1)];
+                const segmentProgress = (progress * totalPoints) - currentPointIndex;
+                if(point1 && point2) movingObject.position.lerpVectors(point1, point2, segmentProgress);
+                else if (point1) movingObject.position.copy(point1);
+            }
+
+            // Emit & Update particles - INCREASED EMISSION RATE
+            if (progress < 1) {
+                 for(let i = 0; i < 4; i++) emitParticle(); // Emit 4 particles per frame
+            }
+            updateParticles(delta);
+
+            // Update spiral tube geometry
+            const tubePointsCount = spiralTube ? spiralTube.geometry.parameters.path.points.length : 0;
+            const pointsSinceLastUpdate = currentPointIndex - (tubePointsCount -1);
+            if (currentPointIndex > 0 && (tubePointsCount === 0 || pointsSinceLastUpdate > 0)) {
+                 createOrUpdateSpiralTube();
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // === Handle Window Resize (Unchanged) ===
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+         // === Reset Animation (Function name changed) ===
+        function resetAnimation() { // Changed function name
+            console.log("Resetting animation..."); // Updated log message
+            animationTime = 0;
+            currentPointIndex = 0;
+            clock.start();
+
+            if (spiralPoints.length > 0) movingObject.position.copy(spiralPoints[0]);
+            if (spiralTube) {
+                scene.remove(spiralTube);
+                spiralTube.geometry.dispose();
+                spiralTube.material.dispose();
+                spiralTube = null;
+            }
+            createOrUpdateSpiralTube();
+
+            // Reset particles
+            particleCount = 0;
+            particlePositions.fill(0);
+            particleLifetimes.fill(0);
+            particleVelocities.fill(0);
+            particleColors.fill(0);
+            if(particleGeometry) {
+                particleGeometry.attributes.position.needsUpdate = true;
+                particleGeometry.attributes.color.needsUpdate = true;
+            }
+        }
+
+
+        // === Start ===
+        window.onload = init;
+
+    </script>
+</body>
+</html>

@@ -2,6 +2,8 @@
 
 This project is a WebGL visualization built with Three.js that aims to represent the concept of dialectical progress through an animated, growing spiral. A vibrant, fiery sphere traverses a golden path, leaving a trail of particles, symbolizing the dynamic and generative nature of this philosophical idea.
 
+![dialectic-spiral](https://github.com/user-attachments/assets/480b13d1-9c91-4f2f-808e-990f69045b14)
+
 ## Philosophical Inspiration: Hegel's Dialectical Progress
 
 The animation is inspired by Georg Wilhelm Friedrich Hegel's notion of **dialectical progress**. Hegel's dialectic is a process of development and change in which a concept or state of affairs (the "thesis") encounters its opposite or contradiction (the "antithesis"). The tension and conflict between these two are not merely destructive but lead to a resolution at a higher level (the "synthesis"). This synthesis, in turn, becomes a new thesis, and the process continues, driving forward intellectual, historical, or spiritual development.
